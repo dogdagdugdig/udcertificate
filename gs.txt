@@ -1,0 +1,74 @@
+const SHEET_ID = '1Xx8KwXhcDpej3af_37vM9lwSQDhMGyRvTHXALx_fIO0';
+const SHEET_NAME = 'certificate';
+
+function doGet(e) {
+  const q = ((e && e.parameter && e.parameter.q) || '').toString().trim();
+  return json_(searchCertificates_(q));
+}
+
+function searchCertificates_(q) {
+  // ต้องพิมพ์อย่างน้อย 2 ตัวอักษร เพื่อไม่ให้ดึงรายชื่อทั้งหมดได้
+  if (q.length < 2) return { success: false, message: 'กรุณากรอกอย่างน้อย 2 ตัวอักษร', results: [] };
+
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME);
+  if (!sheet) return { success: false, message: 'ไม่พบชีต ' + SHEET_NAME, results: [] };
+
+  const values = sheet.getDataRange().getDisplayValues();
+  if (values.length < 2) return { success: true, results: [] };
+
+  const headers = values[0].map(h => String(h).trim().toUpperCase());
+  const idx = name => headers.indexOf(name);
+  const col = {
+    id: idx('ID'), title: idx('TITLE'), pre: idx('PRENAME'),
+    first: idx('FIRSTNAME'), last: idx('LASTNAME'), pdf: idx('PDFURL')
+  };
+
+  const keyword = normalize_(q);
+  const results = [];
+
+  for (let i = 1; i < values.length; i++) {
+    const r = values[i];
+    const prename = col.pre > -1 ? r[col.pre] : '';
+    const first = col.first > -1 ? r[col.first] : '';
+    const last = col.last > -1 ? r[col.last] : '';
+    const fullName = normalize_([prename, first, last].join(' '));
+    const nameNoPre = normalize_([first, last].join(' '));
+
+    if (fullName.indexOf(keyword) === -1 && nameNoPre.indexOf(keyword) === -1) continue;
+
+    const fileId = extractDriveId_(col.pdf > -1 ? r[col.pdf] : '');
+    results.push({
+      id: col.id > -1 ? r[col.id] : '',
+      title: col.title > -1 ? r[col.title] : '',
+      prename: prename,
+      firstname: first,
+      lastname: last,
+      fileId: fileId,
+      // ลิงก์เปิดไฟล์ใน Google Drive (แทนการดาวน์โหลดตรง)
+      viewUrl: fileId ? 'https://drive.google.com/file/d/' + fileId + '/view' : ''
+    });
+    if (results.length >= 20) break; // จำกัดผลลัพธ์
+  }
+
+  return { success: true, results: results };
+}
+
+// รองรับทั้งกรณีใส่ "ID ไฟล์" ล้วน ๆ และกรณีใส่ URL เต็มของ Drive
+function extractDriveId_(value) {
+  const v = String(value || '').trim();
+  if (!v) return '';
+  let m = v.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  m = v.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  return /^[a-zA-Z0-9_-]{20,}$/.test(v) ? v : '';
+}
+
+function normalize_(s) {
+  return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}

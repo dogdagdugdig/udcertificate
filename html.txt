@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ระบบค้นหาเกียรติบัตร</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Tailwind (ปิด preflight เพื่อไม่ให้ชนกับ Bootstrap) -->
+  <script>tailwind = { config: { corePlugins: { preflight: false } } }</script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <style>
+    :root {
+      --pink-50:#fff7fa; --pink-100:#ffe9f0; --pink-200:#ffd0e0; --pink-300:#ffb0cb;
+      --pink-400:#f783ac; --pink-500:#ec6a9b; --pink-600:#d9487f; --ink:#3b2a33; --muted:#8a7681;
+    }
+    * { -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: 'Noto Sans Thai', sans-serif;
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      background: linear-gradient(160deg, #ffeaf2 0%, #ffffff 50%, #fff0f6 100%);
+      position: relative; overflow-x: hidden;
+    }
+    /* วงกลมเบลอตกแต่งพื้นหลัง */
+    .blob { position: fixed; border-radius: 50%; filter: blur(70px); opacity:.55; z-index:0; pointer-events:none; animation: float 14s ease-in-out infinite; }
+    .blob.b1 { width:340px; height:340px; background:#ffc2d9; top:-90px; left:-90px; }
+    .blob.b2 { width:300px; height:300px; background:#ffd9e8; bottom:-80px; right:-70px; animation-delay:-6s; }
+    .blob.b3 { width:200px; height:200px; background:#ffe3ef; top:45%; right:12%; animation-delay:-3s; }
+    @keyframes float { 0%,100%{ transform:translate(0,0) } 50%{ transform:translate(24px,-28px) } }
+
+    header, main, footer { position: relative; z-index: 1; }
+    main { flex: 1; }
+
+    /* Header */
+    .logo { max-width:150px; width:100%; height:auto; filter: drop-shadow(0 8px 16px rgba(236,106,155,.25)); animation: pop .6s ease both; }
+    .title-grad {
+      background: linear-gradient(90deg, var(--pink-600), var(--pink-400));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      font-weight: 700; letter-spacing: -.01em;
+    }
+    .subtitle { color: var(--muted); font-weight: 400; }
+
+    /* Search card (glass) */
+    .glass {
+      background: rgba(255,255,255,.72);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255,255,255,.9);
+      border-radius: 1.5rem;
+      box-shadow: 0 18px 45px -12px rgba(236,106,155,.28), 0 2px 6px rgba(236,106,155,.08);
+    }
+    .search-wrap {
+      display:flex; align-items:center; gap:.5rem;
+      background:#fff; border:2px solid var(--pink-100); border-radius: 999px;
+      padding:.35rem .35rem .35rem 1.1rem; transition: .2s;
+    }
+    .search-wrap:focus-within { border-color: var(--pink-400); box-shadow: 0 0 0 .3rem rgba(247,131,172,.18); }
+    .search-wrap svg.ico { flex:none; color: var(--pink-400); }
+    .search-wrap input {
+      flex:1; min-width:0; border:0; outline:0; background:transparent;
+      font-size:1.05rem; padding:.55rem .25rem; color:var(--ink);
+    }
+    .search-wrap input::placeholder { color:#c3aab5; }
+    .btn-clear { border:0; background:var(--pink-100); color:var(--pink-600); width:32px; height:32px; border-radius:50%; display:none; line-height:1; flex:none; }
+    .btn-clear.show { display:inline-block; }
+
+    .btn-pink {
+      background: linear-gradient(135deg, var(--pink-400), var(--pink-600));
+      border:0; color:#fff; font-weight:600; border-radius: 999px;
+      transition: transform .2s, box-shadow .2s;
+    }
+    .btn-pink:hover { color:#fff; transform: translateY(-2px); box-shadow: 0 10px 22px -6px rgba(217,72,127,.55); }
+    .btn-pink:active { transform: translateY(0); }
+    .btn-pink:disabled { opacity:.7; }
+
+    .hint { color: var(--muted); font-size:.85rem; }
+
+    /* Result */
+    .result-head { color: var(--muted); font-size:.9rem; }
+    .result-head b { color: var(--pink-600); }
+    .result-card {
+      position:relative; background:#fff; border-radius:1.4rem; padding:1.4rem 1.4rem 1.4rem 1.6rem;
+      border:1px solid var(--pink-100);
+      box-shadow: 0 10px 30px -14px rgba(236,106,155,.35);
+      transition: transform .25s, box-shadow .25s; overflow:hidden;
+      animation: rise .5s ease both;
+    }
+    .result-card::before {
+      content:''; position:absolute; left:0; top:0; bottom:0; width:6px;
+      background: linear-gradient(180deg, var(--pink-300), var(--pink-500));
+    }
+    .result-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -14px rgba(236,106,155,.5); }
+    .avatar {
+      flex:none; width:54px; height:54px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-size:1.4rem; font-weight:700; color:#fff;
+      background: linear-gradient(135deg, var(--pink-300), var(--pink-500));
+      box-shadow: 0 8px 18px -6px rgba(236,106,155,.6);
+    }
+    .rname { font-weight:700; font-size:1.3rem; color: var(--pink-600); line-height:1.3; word-break: break-word; }
+    .chip {
+      display:inline-flex; align-items:center; gap:.4rem;
+      background: var(--pink-50); color: var(--pink-600); border:1px solid var(--pink-200);
+      border-radius:999px; padding:.25rem .8rem; font-size:.82rem; font-weight:500;
+    }
+    .rtitle { background: var(--pink-50); border-radius: 1rem; padding:.8rem 1rem; }
+    .rtitle small { color: var(--muted); display:block; }
+    .rtitle span { font-weight:500; }
+
+    .btn-download { padding:.8rem 1rem; font-size:1.05rem; display:flex; align-items:center; justify-content:center; gap:.55rem; text-decoration:none; }
+    .btn-download svg { transition: transform .25s; }
+    .btn-download:hover svg { transform: translateY(2px); }
+
+    /* Empty / Skeleton */
+    .empty { text-align:center; padding:2.2rem 1.2rem; animation: rise .5s ease both; }
+    .empty .emoji { font-size:3rem; }
+    .skel { border-radius:1.4rem; height:190px; background:#fff; border:1px solid var(--pink-100); position:relative; overflow:hidden; }
+    .skel::after {
+      content:''; position:absolute; inset:0;
+      background: linear-gradient(100deg, transparent 20%, rgba(255,208,224,.55) 50%, transparent 80%);
+      transform: translateX(-100%); animation: shimmer 1.3s infinite;
+    }
+    @keyframes shimmer { to { transform: translateX(100%); } }
+    @keyframes rise { from { opacity:0; transform: translateY(14px);} to { opacity:1; transform:none; } }
+    @keyframes pop { from { opacity:0; transform: scale(.85);} to { opacity:1; transform:none; } }
+
+    footer { color: var(--muted); font-size:.85rem; }
+
+    @media (max-width: 575.98px) {
+      .rname { font-size:1.15rem; }
+      .avatar { width:46px; height:46px; font-size:1.2rem; }
+      .btn-search-text { display:none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+  <!-- Header (ไม่มีพื้นหลัง) -->
+  <header class="text-center pt-5 pb-3 px-3">
+    <img class="logo mx-auto mb-3" src="https://img1.pic.in.th/images/logoudmin0000i9ee217dddf01c5a4.png" alt="โลโก้">
+    <h1 class="title-grad h2 mb-1">ระบบค้นหาเกียรติบัตร</h1>
+    <p class="subtitle mb-0">การจัดทำข้อตกลงในการพัฒนางาน</p>
+  </header>
+
+  <main class="container py-3">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-10 col-lg-7 col-xl-6">
+
+        <!-- ช่องค้นหา -->
+        <section class="glass p-3 p-sm-4 mb-4">
+          <label for="q" class="form-label fw-semibold mb-2 ps-1">🎓 ค้นหาเกียรติบัตรของคุณ</label>
+          <div class="search-wrap">
+            <svg class="ico" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="q" type="text" placeholder="พิมพ์ชื่อหรือนามสกุล" autocomplete="off" enterkeyhint="search">
+            <button id="btnClear" class="btn-clear" type="button" aria-label="ล้างคำค้นหา">✕</button>
+            <button id="btnSearch" class="btn btn-pink px-3 px-sm-4 py-2" type="button">
+              <span class="btn-search-text">ค้นหา</span>
+              <svg class="d-sm-none" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            </button>
+          </div>
+          <div class="hint mt-2 ps-1">พิมพ์อย่างน้อย 2 ตัวอักษร แล้วกด Enter หรือปุ่มค้นหา</div>
+        </section>
+
+        <!-- ผลลัพธ์ -->
+        <div id="count" class="result-head mb-2 ps-1"></div>
+        <div id="result" class="d-grid gap-3"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer (ไม่มีพื้นหลัง) -->
+  <footer class="text-center py-4">
+    © 2026 ระบบค้นหาเกียรติบัตร | By ครูเบิ้ม
+  </footer>
+
+<script>
+  const API_URL = 'https://script.google.com/macros/s/AKfycbxAzKZ_YztFop15snUuZxjYt10LTSmM_g4LLHePYYZGCes7K9LBg-kn0Cmg2BBSgDJR/exec';
+  const PINK = '#ec6a9b';
+
+  const $q = document.getElementById('q');
+  const $btn = document.getElementById('btnSearch');
+  const $clear = document.getElementById('btnClear');
+  const $result = document.getElementById('result');
+  const $count = document.getElementById('count');
+  const btnHTML = $btn.innerHTML;
+
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  const skeleton = () => {
+    $count.textContent = '';
+    $result.innerHTML = '<div class="skel"></div><div class="skel" style="height:150px"></div>';
+  };
+
+  async function search() {
+    const q = $q.value.trim();
+    if (q.length < 2) {
+      Swal.fire({ icon:'warning', title:'กรุณากรอกชื่อหรือนามสกุล', text:'พิมพ์อย่างน้อย 2 ตัวอักษร', confirmButtonColor: PINK });
+      return;
+    }
+    $btn.disabled = true;
+    $btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    skeleton();
+
+    try {
+      const res = await fetch(API_URL + '?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      render(data.results || []);
+    } catch (err) {
+      console.error(err);
+      $result.innerHTML = '';
+      Swal.fire({ icon:'error', title:'เกิดข้อผิดพลาด', text:'ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง', confirmButtonColor: PINK });
+    } finally {
+      $btn.disabled = false;
+      $btn.innerHTML = btnHTML;
+    }
+  }
+
+  function render(list) {
+    if (!list.length) {
+      $count.textContent = '';
+      $result.innerHTML = `
+        <div class="glass empty">
+          <div class="emoji">🔍</div>
+          <p class="mb-0 mt-2 fw-semibold" style="color:var(--pink-600)">ไม่พบข้อมูลของคุณในระบบ</p>
+          <p class="hint mb-0 mt-1">ลองตรวจสอบตัวสะกด หรือค้นหาด้วยนามสกุลแทน</p>
+        </div>`;
+      return;
+    }
+
+    $count.innerHTML = `พบ <b>${list.length}</b> รายการ`;
+    $result.innerHTML = list.map((r, i) => {
+      const name = `${r.prename || ''}${r.firstname || ''} ${r.lastname || ''}`.trim();
+      const initial = esc((r.firstname || r.lastname || '?').trim().charAt(0));
+      const action = r.viewUrl
+        ? `<a href="${esc(r.viewUrl)}" target="_blank" rel="noopener" data-name="${esc(name)}"
+              class="btn btn-pink btn-download w-100 mt-3">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+              ดาวน์โหลด PDF</a>`
+        : `<button class="btn btn-light w-100 mt-3 py-3 rounded-pill" disabled>ยังไม่มีไฟล์ PDF</button>`;
+
+      return `
+        <article class="result-card" style="animation-delay:${i * 70}ms">
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <div class="avatar">${initial}</div>
+            <div class="min-w-0">
+              <div class="rname">${esc(name)}</div>
+              <span class="chip mt-1">🏅 รหัส ${esc(r.id)}</span>
+            </div>
+          </div>
+          <div class="rtitle">
+            <small>ชื่อเรื่อง</small>
+            <span>${esc(r.title) || '-'}</span>
+          </div>
+          ${action}
+        </article>`;
+    }).join('');
+  }
+
+  // แจ้งเตือนเมื่อกดดาวน์โหลด (ลิงก์เปิดในแท็บใหม่ตามปกติ)
+  $result.addEventListener('click', e => {
+    const a = e.target.closest('.btn-download');
+    if (!a) return;
+    Swal.fire({
+      icon:'success', title:'ดาวน์โหลดสำเร็จ',
+      text:'เปิดไฟล์เกียรติบัตรของ ' + a.dataset.name + ' แล้ว',
+      timer: 2500, timerProgressBar: true, showConfirmButton:false
+    });
+  });
+
+  $q.addEventListener('input', () => $clear.classList.toggle('show', $q.value.length > 0));
+  $clear.addEventListener('click', () => {
+    $q.value = ''; $clear.classList.remove('show');
+    $result.innerHTML = ''; $count.textContent = ''; $q.focus();
+  });
+  $btn.addEventListener('click', search);
+  $q.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+</script>
+</body>
+</html>
